@@ -1,0 +1,42 @@
+services:
+  ingest:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: energy-platform-ingest:latest
+    working_dir: /app
+    profiles: ["ingest"]
+    volumes:
+      - ./.dlt/secrets.toml:/app/.dlt/secrets.toml:ro
+    # docker compose --profile ingest run --rm ingest
+    # docker compose --profile ingest run --rm ingest --contract contracts/electricity_maps.yaml --destination databricks
+
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: energy-platform-airflow:latest
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:${AIRFLOW_ADMIN_PASSWORD:-admin}
+      AIRFLOW_CONN_DATABRICKS_DEFAULT: ${AIRFLOW_CONN_DATABRICKS_DEFAULT:-}
+      ELECTRICITY_ETL_JOB_ID: ${ELECTRICITY_ETL_JOB_ID:-}
+      ELECTRICITY_ETL_JOB_NAME: ${ELECTRICITY_ETL_JOB_NAME:-electricity-etl}
+      INGEST_IMAGE: energy-platform-ingest:latest
+      INGEST_SECRETS_HOST_PATH: ${PWD}/.dlt/secrets.toml
+      DOCKER_URL: unix://var/run/docker.sock
+    user: "50000:0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: standalone
+
+volumes:
+  airflow-logs:

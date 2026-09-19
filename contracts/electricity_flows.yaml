@@ -1,0 +1,126 @@
+# Source-to-bronze contract for Electricity Maps latest cross-border flows.
+version: "1.0"
+name: electricity_maps_electricity_flows
+domain: energy
+description: Latest electricity flows by Electricity Maps zone.
+
+source:
+  name: electricity_maps
+  kind: rest_api
+  base_url: https://api.electricitymaps.com/v4/
+  auth:
+    type: api_key
+    name: auth-token
+    location: header
+    secret_key: sources.electricity_maps.api_key
+  resources:
+    - name: electricity_flows_latest
+      path: electricity-flows/latest
+      method: GET
+      paginator: single_page
+      response_mode: object
+      params:
+        zone:
+          type: values
+          values:
+            - DE
+            - FR
+            - NL
+            - BE
+            - AT
+            - PL
+            - ES
+            - IT
+            - GB
+            - SE
+
+landing_zone:
+  catalog: nxp
+  schema: landing
+  volume: raw
+  file_format: jsonl
+  prefix: electricity_flows_latest
+  retention_days: 7
+
+bronze:
+  catalog: nxp
+  schema: bronze
+  table: electricity_flows_latest
+  destination: databricks
+  write_disposition: append
+  file_format: parquet
+  table_format: delta
+  table_comment: Bronze snapshot of the raw Electricity Maps flows payload.
+  partition_by:
+    - year
+    - month
+    - day
+
+keys:
+  business_keys:
+    - zone
+    - datetime
+    - neighbor_zone
+    - flow_direction
+
+schema:
+  columns:
+    - name: extracted_at
+      data_type: timestamp
+      nullable: false
+      description: UTC timestamp of this ingest.
+    - name: source_url
+      data_type: text
+      nullable: false
+      description: API URL used to fetch this payload.
+    - name: payload
+      data_type: text
+      nullable: false
+      description: Raw API JSON for one zone. Not expanded in bronze.
+    - name: year
+      data_type: text
+      nullable: false
+      description: UTC year of extracted_at (ingest time). Partition column.
+    - name: month
+      data_type: text
+      nullable: false
+      description: UTC month of extracted_at, zero-padded (ingest time). Partition column.
+    - name: day
+      data_type: text
+      nullable: false
+      description: UTC day of extracted_at, zero-padded (ingest time). Partition column.
+
+layers:
+  silver:
+    catalog: nxp
+    schema: silver
+    table: fact_electricity_flows
+    path: /Volumes/nxp/silver/fact_electricity_flows
+    partition_by:
+      - year
+      - month
+      - day
+    tables:
+      - name: fact
+        table: fact_electricity_flows
+        path: /Volumes/nxp/silver/fact_electricity_flows
+      - name: dim_zone
+        table: dim_zone
+        path: /Volumes/nxp/silver/dim_zone
+        partition_by: []
+      - name: dim_date
+        table: dim_date
+        path: /Volumes/nxp/silver/dim_date
+        partition_by: []
+  gold:
+    catalog: nxp
+    schema: gold
+    partition_by:
+      - dt
+    tables:
+      - name: france_imports
+        table: electricity_flows_fr_imports_daily
+        path: /Volumes/nxp/gold/electricity_flows_fr_imports_daily
+      - name: france_exports
+        table: electricity_flows_fr_exports_daily
+        path: /Volumes/nxp/gold/electricity_flows_fr_exports_daily

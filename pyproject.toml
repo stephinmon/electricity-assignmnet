@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "energy-platform"
+version = "0.1.0"
+description = "Contract-based energy data platform: dlt bronze ingestion, PySpark silver/gold ETL."
+authors = ["Stephin Mon Antony"]
+readme = "README.md"
+packages = [{include = "energy_platform", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+dlt = {version = "1.30.0", extras = ["databricks", "parquet"]}
+pydantic = "^2.7"
+pyyaml = "^6.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+ruff = "^0.6"
+duckdb = "^1.0"
+
+[tool.poetry.group.local]
+optional = true
+
+[tool.poetry.group.local.dependencies]
+duckdb = "^1.0"
+
+[tool.poetry.scripts]
+energy-ingest = "energy_platform.ingestion.cli:main"
+energy-cleanup = "energy_platform.ingestion.cleanup:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

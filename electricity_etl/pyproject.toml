@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "electricity-etl"
+version = "0.1.0"
+description = "PySpark silver/gold ETL wheel for Electricity Maps bronze tables."
+authors = ["Stephin Mon Antony"]
+packages = [{include = "electricity_etl", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+pydantic = "^2.7"
+pyyaml = "^6.0"
+databricks-sql-connector = "^4.0"
+pyspark = {version = ">=3.4,<4.0", optional = true}
+delta-spark = {version = ">=3.0,<4.0", optional = true}
+
+[tool.poetry.extras]
+spark = ["pyspark", "delta-spark"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+ruff = "^0.6"
+pyspark = ">=3.4,<4.0"
+
+[tool.poetry.scripts]
+electricity-etl = "electricity_etl.cli:main"
+main = "electricity_etl.cli:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

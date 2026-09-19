@@ -1,0 +1,34 @@
+bundle:
+  name: electricity_etl
+
+include:
+  - resources/jobs/*.yml
+
+artifacts:
+  electricity_etl:
+    type: whl
+    build: poetry build
+    path: ./electricity_etl
+    dynamic_version: true
+
+sync:
+  include:
+    - ./contracts/**
+  exclude:
+    - .venv
+    - electricity_etl/.venv
+    - electricity_etl/output
+    - electricity_etl/dist
+    - "**/.venv/**"
+    - "**/__pycache__/**"
+
+workspace:
+  host: https://dbc-81265a1a-0ee9.cloud.databricks.com
+  profile: databricks-free
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production

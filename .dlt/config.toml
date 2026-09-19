@@ -1,0 +1,6 @@
+[runtime]
+log_level = "INFO"
+
+[destination.databricks]
+# Free Edition Files API 404s on REMOVE after COPY INTO. Keep staged parquet in the volume.
+keep_staged_files = true

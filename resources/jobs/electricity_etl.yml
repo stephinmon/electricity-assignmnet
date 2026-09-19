@@ -1,0 +1,103 @@
+resources:
+  jobs:
+    electricity_etl:
+      name: electricity-etl
+      max_concurrent_runs: 1
+      tags:
+        project: nxp-energy
+        layer: etl
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - ../../electricity_etl/dist/*.whl
+      tasks:
+        - task_key: silver_dim_zone
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "dim_zone"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: silver_fact_electricity_mix
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "fact_electricity_mix"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: silver_fact_electricity_flows
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "fact_electricity_flows"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: silver_dim_date
+          depends_on:
+            - task_key: silver_fact_electricity_mix
+            - task_key: silver_fact_electricity_flows
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "dim_date"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: gold_electricity_mix_daily_relative
+          depends_on:
+            - task_key: silver_dim_zone
+            - task_key: silver_fact_electricity_mix
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "electricity_mix_daily_relative"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: gold_electricity_flows_fr_imports_daily
+          depends_on:
+            - task_key: silver_dim_zone
+            - task_key: silver_fact_electricity_flows
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "electricity_flows_fr_imports_daily"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"
+
+        - task_key: gold_electricity_flows_fr_exports_daily
+          depends_on:
+            - task_key: silver_dim_zone
+            - task_key: silver_fact_electricity_flows
+          environment_key: default
+          python_wheel_task:
+            package_name: electricity_etl
+            entry_point: main
+            parameters:
+              - "--table"
+              - "electricity_flows_fr_exports_daily"
+              - "--contracts-dir"
+              - "${workspace.file_path}/contracts"

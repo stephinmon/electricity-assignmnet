@@ -1,0 +1,23 @@
+.venv/
+.venv-airflow/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# dlt local state and secrets
+.dlt/secrets.toml
+.dlt/pipelines/
+.dlt/bronze_json/
+.dlt/landing_zone/
+*.duckdb
+*.duckdb.wal
+
+.env
+.DS_Store
+.databricks/
+airflow/home/
