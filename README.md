@@ -20,6 +20,10 @@ databricks.yml                     # Databricks Asset Bundle (ETL job)
 resources/jobs/electricity_etl.yml # one job task per silver/gold table
 airflow/dags/                      # Airflow: ingest DAG + Databricks ETL DAG
 airflow/Dockerfile                 # Airflow image (DockerOperator + Databricks)
+.github/actions/deploy-etl/        # composite action: Databricks bundle + job id
+.github/actions/deploy-docker/     # composite action: ingest + Airflow images
+.github/workflows/deploy-etl.yml
+.github/workflows/deploy-docker.yml
 ```
 
 The YAML contract is the interface. Ingestion does not hardcode the API path, zones, table name, or write disposition. The PySpark wheel in `electricity_etl/` reads the same file for bronze inputs and silver/gold outputs.
@@ -231,12 +235,53 @@ databricks auth login --host https://dbc-81265a1a-0ee9.cloud.databricks.com --pr
 Then from the repo root:
 
 ```bash
+export DATABRICKS_CONFIG_PROFILE=databricks-free
 databricks bundle validate
 databricks bundle deploy -t dev
 databricks bundle run electricity_etl -t dev
 ```
 
 `databricks bundle deploy` builds `electricity_etl` with Poetry, uploads the wheel, syncs `contracts/`, and creates the job. Needs Databricks CLI 0.218+ and Poetry on the machine that deploys.
+
+After a deploy, the job id is in the bundle summary (no copy-paste from the UI):
+
+```bash
+databricks bundle summary -t prod -o json | python3 -c "import json,sys; j=json.load(sys.stdin)['resources']['jobs']['electricity_etl']; print(j['id'], j['name'])"
+```
+
+Airflow can also run the job by **name**. Production DAB mode keeps the name `electricity-etl`, so `ELECTRICITY_ETL_JOB_NAME` is enough if you skip the id. Development mode prefixes the name (`[dev <user>] electricity-etl`); then pass the id.
+
+## GitHub Actions
+
+Composite **actions** live in `.github/actions/`. **Workflows** call them separately:
+
+1. **Deploy ETL** (`.github/workflows/deploy-etl.yml`) — `databricks bundle deploy`, then job id from `databricks bundle summary`
+2. **Deploy Docker** (`.github/workflows/deploy-docker.yml`) — build/push ingest + Airflow images; **job id is a required input**
+
+Add repository secrets (Settings → Secrets and variables → Actions):
+
+- `DATABRICKS_HOST` — `https://dbc-81265a1a-0ee9.cloud.databricks.com`
+- `DATABRICKS_TOKEN` — a PAT for that workspace
+
+Run order:
+
+1. **Actions → Deploy ETL → Run workflow** (target `prod` for a stable job name)
+2. Copy `job_id` from that run’s “Read deployed job id” log (or the `electricity-etl-job` artifact `job.env`)
+3. **Actions → Deploy Docker → Run workflow** and paste that job id
+
+Images:
+
+- `ghcr.io/<owner>/<repo>/ingest:<sha>`
+- `ghcr.io/<owner>/<repo>/airflow:<sha>`
+
+The Docker workflow uploads `docker-deploy.env`. On the host that runs Compose:
+
+```bash
+# download docker-deploy.env from the Docker workflow run, then:
+set -a && source docker-deploy.env && set +a
+docker compose pull
+docker compose up airflow
+```
 
 ## Airflow
 

@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: energy-platform-ingest:latest
+    image: ${INGEST_IMAGE:-energy-platform-ingest:latest}
     working_dir: /app
     profiles: ["ingest"]
     volumes:
@@ -15,7 +15,7 @@ services:
     build:
       context: ./airflow
       dockerfile: Dockerfile
-    image: energy-platform-airflow:latest
+    image: ${AIRFLOW_IMAGE:-energy-platform-airflow:latest}
     ports:
       - "8080:8080"
     environment:

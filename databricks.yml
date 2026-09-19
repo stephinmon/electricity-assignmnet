@@ -24,7 +24,6 @@ sync:
 
 workspace:
   host: https://dbc-81265a1a-0ee9.cloud.databricks.com
-  profile: databricks-free
 
 targets:
   dev:

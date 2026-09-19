@@ -1,0 +1,60 @@
+name: Deploy Databricks ETL
+description: Deploy the electricity_etl Databricks Asset Bundle and read the job id.
+
+inputs:
+  target:
+    description: Bundle target (prod or dev)
+    required: false
+    default: prod
+
+outputs:
+  job_id:
+    description: Deployed Databricks job id
+    value: ${{ steps.job_id.outputs.job_id }}
+  job_name:
+    description: Deployed Databricks job name
+    value: ${{ steps.job_id.outputs.job_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check Databricks secrets
+      shell: bash
+      run: |
+        if [ -z "${DATABRICKS_HOST:-}" ] || [ -z "${DATABRICKS_TOKEN:-}" ]; then
+          echo "Set DATABRICKS_HOST and DATABRICKS_TOKEN." >&2
+          exit 1
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Poetry
+      shell: bash
+      run: pipx install poetry==1.8.5
+
+    - name: Install Databricks CLI
+      uses: databricks/setup-cli@main
+
+    - name: Deploy bundle
+      shell: bash
+      run: |
+        databricks bundle validate -t "${{ inputs.target }}"
+        databricks bundle deploy -t "${{ inputs.target }}"
+
+    - name: Read deployed job id
+      id: job_id
+      shell: bash
+      run: |
+        databricks bundle summary -t "${{ inputs.target }}" -o json > bundle-summary.json
+        python3 "${{ github.action_path }}/read_job.py"
+
+    - name: Upload job env
+      uses: actions/upload-artifact@v4
+      with:
+        name: electricity-etl-job
+        path: |
+          job.env
+          bundle-summary.json
