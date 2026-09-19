@@ -23,9 +23,6 @@ on:
         required: false
         type: string
         default: electricity-etl
-    secrets:
-      GITHUB_TOKEN:
-        required: false
 
 permissions:
   contents: read
