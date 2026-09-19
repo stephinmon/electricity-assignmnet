@@ -1,14 +1,7 @@
 name: Build and push Docker images
-description: Build and push ingest and Airflow images to GHCR, using the Databricks job id.
+description: Build and push ingest and Airflow images to GHCR.
 
 inputs:
-  job_id:
-    description: Databricks job id for the Airflow ETL DAG
-    required: true
-  job_name:
-    description: Databricks job name fallback
-    required: false
-    default: electricity-etl
   github_token:
     description: Token used to push to GHCR
     required: true
@@ -64,9 +57,6 @@ runs:
         file: ./airflow/Dockerfile
         push: true
         platforms: linux/amd64,linux/arm64
-        build-args: |
-          ELECTRICITY_ETL_JOB_ID=${{ inputs.job_id }}
-          ELECTRICITY_ETL_JOB_NAME=${{ inputs.job_name }}
         tags: |
           ${{ steps.image.outputs.airflow }}:${{ steps.image.outputs.tag }}
           ${{ steps.image.outputs.airflow }}:latest
@@ -77,8 +67,6 @@ runs:
         cat > docker-deploy.env <<EOF
         INGEST_IMAGE=${{ steps.image.outputs.ingest }}:${{ steps.image.outputs.tag }}
         AIRFLOW_IMAGE=${{ steps.image.outputs.airflow }}:${{ steps.image.outputs.tag }}
-        ELECTRICITY_ETL_JOB_ID=${{ inputs.job_id }}
-        ELECTRICITY_ETL_JOB_NAME=${{ inputs.job_name }}
         EOF
 
     - name: Upload docker-deploy.env

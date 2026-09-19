@@ -10,8 +10,3 @@ RUN pip install --no-cache-dir \
 USER root
 COPY --chown=airflow:root dags /opt/airflow/dags
 USER airflow
-
-ARG ELECTRICITY_ETL_JOB_ID=
-ARG ELECTRICITY_ETL_JOB_NAME=electricity-etl
-ENV ELECTRICITY_ETL_JOB_ID=${ELECTRICITY_ETL_JOB_ID} \
-    ELECTRICITY_ETL_JOB_NAME=${ELECTRICITY_ETL_JOB_NAME}

@@ -2,27 +2,7 @@ name: Deploy Docker
 
 on:
   workflow_dispatch:
-    inputs:
-      job_id:
-        description: Databricks job id from Deploy ETL (bundle summary)
-        required: true
-        type: string
-      job_name:
-        description: Databricks job name (prod default electricity-etl)
-        required: false
-        type: string
-        default: electricity-etl
   workflow_call:
-    inputs:
-      job_id:
-        description: Databricks job id
-        required: true
-        type: string
-      job_name:
-        description: Databricks job name
-        required: false
-        type: string
-        default: electricity-etl
 
 permissions:
   contents: read
@@ -39,6 +19,4 @@ jobs:
       - name: Build and push images
         uses: ./.github/actions/deploy-docker
         with:
-          job_id: ${{ inputs.job_id }}
-          job_name: ${{ inputs.job_name || 'electricity-etl' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

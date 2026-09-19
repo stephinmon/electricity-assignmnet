@@ -16,13 +16,6 @@ on:
         description: Databricks bundle target
         type: string
         default: prod
-    outputs:
-      job_id:
-        description: Deployed Databricks job id
-        value: ${{ jobs.deploy.outputs.job_id }}
-      job_name:
-        description: Deployed Databricks job name
-        value: ${{ jobs.deploy.outputs.job_name }}
     secrets:
       DATABRICKS_HOST:
         required: true
@@ -40,15 +33,11 @@ jobs:
   deploy:
     name: Deploy Databricks ETL job
     runs-on: ubuntu-latest
-    outputs:
-      job_id: ${{ steps.bundle.outputs.job_id }}
-      job_name: ${{ steps.bundle.outputs.job_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Deploy bundle
-        id: bundle
         uses: ./.github/actions/deploy-etl
         with:
           target: ${{ inputs.target || 'prod' }}

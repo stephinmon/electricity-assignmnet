@@ -20,7 +20,7 @@ databricks.yml                     # Databricks Asset Bundle (ETL job)
 resources/jobs/electricity_etl.yml # one job task per silver/gold table
 airflow/dags/                      # Airflow: ingest DAG + Databricks ETL DAG
 airflow/Dockerfile                 # Airflow image (DockerOperator + Databricks)
-.github/actions/deploy-etl/        # composite action: Databricks bundle + job id
+.github/actions/deploy-etl/        # composite action: Databricks bundle deploy
 .github/actions/deploy-docker/     # composite action: ingest + Airflow images
 .github/workflows/deploy-etl.yml
 .github/workflows/deploy-docker.yml
@@ -33,6 +33,7 @@ The YAML contract is the interface. Ingestion does not hardcode the API path, zo
 1. Python 3.10+
 2. An Electricity Maps API token (header `auth-token`)
 3. For Unity Catalog loads: a Databricks Free Edition workspace, a SQL warehouse, and a personal access token
+4. Docker Engine **24.0+** and Docker Compose **v2.24+** (Docker Desktop 4.28+ includes both)
 
 Rotate the API token if it was pasted into chat or committed anywhere. Keep it in `.dlt/secrets.toml` only.
 
@@ -60,13 +61,7 @@ The Unity Catalog target is `nxp`. Get hostname and HTTP path from the SQL wareh
 
 ## Run
 
-Local dry-run into DuckDB:
-
-```bash
-poetry run energy-ingest --contract contracts/electricity_maps.yaml --destination duckdb
-```
-
-Landing zone + bronze tables into Databricks:
+Ingest from your laptop into Databricks (landing zone + bronze). Docker is optional; the destination is the same workspace.
 
 ```bash
 poetry run energy-ingest --contract contracts/electricity_maps.yaml --destination databricks
@@ -241,22 +236,14 @@ databricks bundle deploy -t dev
 databricks bundle run electricity_etl -t dev
 ```
 
-`databricks bundle deploy` builds `electricity_etl` with Poetry, uploads the wheel, syncs `contracts/`, and creates the job. Needs Databricks CLI 0.218+ and Poetry on the machine that deploys.
-
-After a deploy, the job id is in the bundle summary (no copy-paste from the UI):
-
-```bash
-databricks bundle summary -t prod -o json | python3 -c "import json,sys; j=json.load(sys.stdin)['resources']['jobs']['electricity_etl']; print(j['id'], j['name'])"
-```
-
-Airflow can also run the job by **name**. Production DAB mode keeps the name `electricity-etl`, so `ELECTRICITY_ETL_JOB_NAME` is enough if you skip the id. Development mode prefixes the name (`[dev <user>] electricity-etl`); then pass the id.
+`databricks bundle deploy` builds `electricity_etl` with Poetry, uploads the wheel, syncs `contracts/`, and creates the job named **`electricity-etl`** (no `[dev <user>]` prefix). Needs Databricks CLI 0.218+ and Poetry on the machine that deploys. Airflow starts that job by name.
 
 ## GitHub Actions
 
 Composite **actions** live in `.github/actions/`. **Workflows** call them separately:
 
-1. **Deploy ETL** (`.github/workflows/deploy-etl.yml`) — `databricks bundle deploy`, then job id from `databricks bundle summary`
-2. **Deploy Docker** (`.github/workflows/deploy-docker.yml`) — build/push ingest + Airflow images; **job id is a required input**
+1. **Deploy ETL** (`.github/workflows/deploy-etl.yml`) — `databricks bundle deploy` (job name `electricity-etl`)
+2. **Deploy Docker** (`.github/workflows/deploy-docker.yml`) — build/push ingest + Airflow images
 
 Add repository secrets (Settings → Secrets and variables → Actions):
 
@@ -265,9 +252,8 @@ Add repository secrets (Settings → Secrets and variables → Actions):
 
 Run order:
 
-1. **Actions → Deploy ETL → Run workflow** (target `prod` for a stable job name)
-2. Copy `job_id` from that run’s “Read deployed job id” log (or the `electricity-etl-job` artifact `job.env`)
-3. **Actions → Deploy Docker → Run workflow** and paste that job id
+1. **Actions → Deploy ETL → Run workflow**
+2. **Actions → Deploy Docker → Run workflow**
 
 Images:
 
@@ -292,7 +278,7 @@ Two DAGs orchestrate the full path. Ingest tasks start the **ingest Docker image
 | `energy_ingest` | Mix and flows ingest in **parallel**, every hour (via `energy-platform-ingest`) |
 | `electricity_etl` | Starts the deployed Databricks job daily at **07:00 UTC** |
 
-Fill `.env` (from `.env.example`): `ELECTRICITY_ETL_JOB_ID` from `databricks bundle summary -t dev`, and `AIRFLOW_CONN_DATABRICKS_DEFAULT` with a PAT for the same workspace as ingest. Then:
+Fill `.env` (from `.env.example`) with `AIRFLOW_CONN_DATABRICKS_DEFAULT` using a PAT for the same workspace as ingest. Then:
 
 ```bash
 docker compose build ingest airflow
@@ -307,4 +293,4 @@ Stop Airflow with Ctrl+C in that terminal, or:
 docker compose down
 ```
 
-The ingest DAG talks to Docker on the host (`/var/run/docker.sock`) and mounts `.dlt/secrets.toml` into each ingest container. Build `energy-platform-ingest` before the first DAG run. Development-mode DAB jobs are named `[dev <user>] electricity-etl`; prefer the job **id**.
+The ingest DAG talks to Docker on the host (`/var/run/docker.sock`) and mounts `.dlt/secrets.toml` into each ingest container. Build `energy-platform-ingest` before the first DAG run. The Databricks job name is `electricity-etl`.

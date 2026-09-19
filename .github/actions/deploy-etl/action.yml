@@ -1,19 +1,11 @@
 name: Deploy Databricks ETL
-description: Deploy the electricity_etl Databricks Asset Bundle and read the job id.
+description: Deploy the electricity_etl Databricks Asset Bundle (job name electricity-etl).
 
 inputs:
   target:
     description: Bundle target (prod or dev)
     required: false
     default: prod
-
-outputs:
-  job_id:
-    description: Deployed Databricks job id
-    value: ${{ steps.job_id.outputs.job_id }}
-  job_name:
-    description: Deployed Databricks job name
-    value: ${{ steps.job_id.outputs.job_name }}
 
 runs:
   using: composite
@@ -43,18 +35,3 @@ runs:
       run: |
         databricks bundle validate -t "${{ inputs.target }}"
         databricks bundle deploy -t "${{ inputs.target }}"
-
-    - name: Read deployed job id
-      id: job_id
-      shell: bash
-      run: |
-        databricks bundle summary -t "${{ inputs.target }}" -o json > bundle-summary.json
-        python3 "${{ github.action_path }}/read_job.py"
-
-    - name: Upload job env
-      uses: actions/upload-artifact@v4
-      with:
-        name: electricity-etl-job
-        path: |
-          job.env
-          bundle-summary.json

@@ -27,7 +27,7 @@ workspace:
 
 targets:
   dev:
-    mode: development
+    mode: production
     default: true
   prod:
     mode: production

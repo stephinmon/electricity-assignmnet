@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 
 from airflow import DAG
@@ -11,16 +10,6 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
-
-
-def _job_target() -> dict[str, int | str]:
-    job_id = os.environ.get("ELECTRICITY_ETL_JOB_ID", "").strip()
-    if job_id:
-        return {"job_id": int(job_id)}
-    return {
-        "job_name": os.environ.get("ELECTRICITY_ETL_JOB_NAME", "electricity-etl"),
-    }
-
 
 with DAG(
     dag_id="electricity_etl",
@@ -35,7 +24,7 @@ with DAG(
     DatabricksRunNowOperator(
         task_id="run_electricity_etl_job",
         databricks_conn_id="databricks_default",
+        job_name="electricity-etl",
         wait_for_termination=True,
         polling_period_seconds=30,
-        **_job_target(),
     )

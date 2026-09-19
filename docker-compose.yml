@@ -24,9 +24,7 @@ services:
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:${AIRFLOW_ADMIN_PASSWORD:-admin}
       AIRFLOW_CONN_DATABRICKS_DEFAULT: ${AIRFLOW_CONN_DATABRICKS_DEFAULT:-}
-      ELECTRICITY_ETL_JOB_ID: ${ELECTRICITY_ETL_JOB_ID:-}
-      ELECTRICITY_ETL_JOB_NAME: ${ELECTRICITY_ETL_JOB_NAME:-electricity-etl}
-      INGEST_IMAGE: energy-platform-ingest:latest
+      INGEST_IMAGE: ${INGEST_IMAGE:-energy-platform-ingest:latest}
       INGEST_SECRETS_HOST_PATH: ${PWD}/.dlt/secrets.toml
       DOCKER_URL: unix://var/run/docker.sock
     user: "50000:0"
