@@ -22,6 +22,8 @@ sync:
     - "**/.venv/**"
     - "**/__pycache__/**"
 
+# Change this host to YOUR workspace before bundle deploy or GitHub Actions.
+# Example: https://dbc-xxxxxxxx-xxxx.cloud.databricks.com
 workspace:
   host: https://dbc-81265a1a-0ee9.cloud.databricks.com
 
