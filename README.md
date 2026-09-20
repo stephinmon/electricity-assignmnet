@@ -270,6 +270,8 @@ No Electricity Maps token in GitHub. That stays in local `.dlt/secrets.toml`.
 
 Enable Actions if the fork has them disabled: **Actions → I understand my workflows, go ahead and enable them**.
 
+**Unit tests** run automatically on push and pull request (`.github/workflows/unit-tests.yml`). **Deploy ETL** and **Deploy Docker** run the same tests first and skip deploy if pytest fails. No Databricks or Electricity Maps credentials are required for tests.
+
 ### B3. Run Deploy ETL
 
 1. **Actions → Deploy ETL → Run workflow**
@@ -377,6 +379,10 @@ Only if you want unit tests or ingest without Compose.
 ```bash
 poetry install --with dev
 poetry run pytest
+cd electricity_etl
+poetry install --with dev
+poetry run pytest
+cd ..
 ```
 
 ```bash

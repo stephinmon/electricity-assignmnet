@@ -1,0 +1,37 @@
+name: Run unit tests
+description: Run ingest and electricity_etl pytest suites (no Databricks, no Electricity Maps).
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Poetry
+      shell: bash
+      run: pipx install poetry==1.8.5
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Ingest unit tests
+      shell: bash
+      run: |
+        poetry install --with dev --no-ansi
+        poetry run pytest -q
+
+    - name: ETL unit tests
+      shell: bash
+      working-directory: electricity_etl
+      env:
+        SPARK_LOCAL_IP: 127.0.0.1
+        SPARK_DRIVER_HOST: 127.0.0.1
+        SPARK_DRIVER_BIND_ADDRESS: 127.0.0.1
+      run: |
+        poetry install --with dev --no-ansi
+        poetry run pytest -q

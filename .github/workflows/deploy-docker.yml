@@ -9,9 +9,20 @@ permissions:
   packages: write
 
 jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        uses: ./.github/actions/unit-tests
+
   deploy:
     name: Build and push ingest + Airflow
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
