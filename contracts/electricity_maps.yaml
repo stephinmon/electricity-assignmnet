@@ -98,6 +98,7 @@ layers:
     schema: silver
     table: fact_electricity_mix
     path: /Volumes/nxp/silver/fact_electricity_mix
+    write_disposition: merge
     partition_by:
       - year
       - month
@@ -106,14 +107,21 @@ layers:
       - name: fact
         table: fact_electricity_mix
         path: /Volumes/nxp/silver/fact_electricity_mix
+        merge_keys:
+          - zone
+          - datetime
       - name: dim_zone
         table: dim_zone
         path: /Volumes/nxp/silver/dim_zone
         partition_by: []
+        merge_keys:
+          - zone
       - name: dim_date
         table: dim_date
         path: /Volumes/nxp/silver/dim_date
         partition_by: []
+        merge_keys:
+          - dt
   gold:
     catalog: nxp
     schema: gold

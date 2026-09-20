@@ -361,12 +361,12 @@ docker pull ghcr.io/<your-github-user>/<your-repo>/airflow:latest
 
 ## What to expect in Databricks after a full run
 
-| Layer | Where |
-|---|---|
-| Landing | `/Volumes/nxp/landing/raw/electricity_mix_latest/*.jsonl` and `…/electricity_flows_latest/*.jsonl` |
-| Bronze | `nxp.bronze.electricity_mix_latest`, `nxp.bronze.electricity_flows_latest` |
-| Silver | `nxp.silver.fact_electricity_mix`, `fact_electricity_flows`, `dim_zone`, `dim_date` |
-| Gold | `nxp.gold.electricity_mix_daily_relative`, `electricity_flows_fr_imports_daily`, `electricity_flows_fr_exports_daily` |
+| Layer | Where | Write |
+|---|---|---|
+| Landing | `/Volumes/nxp/landing/raw/electricity_mix_latest/*.jsonl` and `…/electricity_flows_latest/*.jsonl` | replace files, 7-day retention |
+| Bronze | `nxp.bronze.electricity_mix_latest`, `nxp.bronze.electricity_flows_latest` | append |
+| Silver | `nxp.silver.fact_electricity_mix`, `fact_electricity_flows`, `dim_zone`, `dim_date` | merge on business keys |
+| Gold | `nxp.gold.electricity_mix_daily_relative`, `electricity_flows_fr_imports_daily`, `electricity_flows_fr_exports_daily` | overwrite |
 
 Airflow schedules (after you unpause): ingest **hourly**, ETL **07:00 UTC**. Manual trigger is enough for evaluation.
 

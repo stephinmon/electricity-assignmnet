@@ -198,3 +198,74 @@ def publish_parquet_to_uc(
                     f"USING DELTA AS SELECT * FROM parquet.`{volume_path}`"
                 )
     print(f"Wrote delta table {table} from {volume_path}")
+
+
+def _merge_on(keys: list[str]) -> str:
+    return " AND ".join(f"t.`{_require_ident(key, 'merge_key')}` <=> s.`{key}`" for key in keys)
+
+
+def _uc_table_exists(cursor, table: str) -> bool:
+    try:
+        cursor.execute(f"DESCRIBE TABLE {table}")
+        cursor.fetchall()
+        return True
+    except Exception:
+        return False
+
+
+def merge_parquet_to_uc(
+    local_dir: Path,
+    *,
+    volume_path: str,
+    table: str,
+    partition_by: list[str],
+    merge_keys: list[str],
+) -> None:
+    catalog, schema, _volume = parse_volume_path(volume_path)
+    files = [
+        path
+        for path in local_dir.rglob("*")
+        if path.is_file() and not path.name.startswith("_") and not path.name.startswith(".")
+    ]
+    if not files:
+        raise FileNotFoundError(f"No parquet files to merge under {local_dir}")
+    table_parts = table.split(".")
+    if len(table_parts) != 3:
+        raise ValueError(f"Expected catalog.schema.table, got {table}")
+    for part, field in zip(table_parts, ("catalog", "schema", "table")):
+        _require_ident(part, field)
+    if not merge_keys:
+        raise ValueError("merge_keys are required")
+    stg_volume = _require_ident(f"_stg_{table_parts[2]}", "volume")
+    stg_path = f"/Volumes/{catalog}/{schema}/{stg_volume}"
+
+    with warehouse_connect(local_dir) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+            cursor.execute(f"CREATE VOLUME IF NOT EXISTS {catalog}.{schema}.{stg_volume}")
+            _clear_volume_files(cursor, stg_path)
+            for path in files:
+                relative = path.relative_to(local_dir).as_posix()
+                dest = f"{stg_path.rstrip('/')}/{relative}"
+                cursor.execute(f"PUT '{path.resolve().as_posix()}' INTO '{dest}' OVERWRITE")
+            source = f"SELECT * FROM parquet.`{stg_path}`"
+            if not _uc_table_exists(cursor, table):
+                if partition_by:
+                    partitioned = ", ".join(
+                        _require_ident(col, "partition") for col in partition_by
+                    )
+                    cursor.execute(
+                        f"CREATE TABLE {table} USING DELTA PARTITIONED BY ({partitioned}) "
+                        f"AS {source}"
+                    )
+                else:
+                    cursor.execute(f"CREATE TABLE {table} USING DELTA AS {source}")
+                print(f"Created delta table {table} from {stg_path}")
+                return
+            cursor.execute(
+                f"MERGE INTO {table} AS t USING ({source}) AS s "
+                f"ON {_merge_on(merge_keys)} "
+                "WHEN MATCHED THEN UPDATE SET * "
+                "WHEN NOT MATCHED THEN INSERT *"
+            )
+    print(f"Merged into delta table {table} from {stg_path}")

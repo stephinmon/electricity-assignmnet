@@ -212,3 +212,47 @@ def test_silver_and_gold_france_flows(spark):
     assert imports["DE"].net_import_mwh == 35.0
     assert exports["IT"].export_mwh == 20.0
     assert exports["DE"].net_import_mwh == 35.0
+
+
+def test_silver_parquet_merge_keeps_existing_keys(spark, tmp_path):
+    from electricity_etl.io import write_delta_and_parquet
+    from electricity_etl.models import LayerContract, LayerTableContract
+
+    layer = LayerContract(
+        catalog="nxp",
+        schema_name="silver",
+        table="fact_electricity_mix",
+        path="/Volumes/nxp/silver/fact_electricity_mix",
+        write_disposition="merge",
+        partition_by=["year", "month", "day"],
+    )
+    output = LayerTableContract(
+        name="fact",
+        table="fact_electricity_mix",
+        path="/Volumes/nxp/silver/fact_electricity_mix",
+        merge_keys=["zone", "datetime"],
+    )
+    first = spark.createDataFrame(
+        [("AT", "2026-09-16T10:00:00", 1.0, "2026", "09", "16")],
+        ["zone", "datetime", "mix_wind", "year", "month", "day"],
+    )
+    second = spark.createDataFrame(
+        [
+            ("AT", "2026-09-16T10:00:00", 9.0, "2026", "09", "16"),
+            ("FR", "2026-09-16T11:00:00", 4.0, "2026", "09", "16"),
+        ],
+        ["zone", "datetime", "mix_wind", "year", "month", "day"],
+    )
+    write_delta_and_parquet(
+        first, layer=layer, output=output, output_root=str(tmp_path), write_tables=False
+    )
+    write_delta_and_parquet(
+        second, layer=layer, output=output, output_root=str(tmp_path), write_tables=False
+    )
+    rows = {
+        (row.zone, row.mix_wind)
+        for row in spark.read.parquet(
+            str(tmp_path / "Volumes/nxp/silver/fact_electricity_mix")
+        ).collect()
+    }
+    assert rows == {("AT", 9.0), ("FR", 4.0)}

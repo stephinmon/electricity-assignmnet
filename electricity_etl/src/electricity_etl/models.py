@@ -20,6 +20,7 @@ class LayerTableContract(BaseModel):
     table: str
     path: str | None = None
     partition_by: list[str] | None = None
+    merge_keys: list[str] | None = None
 
 
 class LayerContract(BaseModel):
@@ -30,6 +31,7 @@ class LayerContract(BaseModel):
     table: str | None = None
     path: str | None = None
     partition_by: list[str] = Field(default_factory=lambda: ["year", "month", "day"])
+    write_disposition: str = "overwrite"
     tables: list[LayerTableContract] = Field(default_factory=list)
 
     def qualified_table(self, table: str | None = None) -> str:

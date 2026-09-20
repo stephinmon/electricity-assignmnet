@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from pyspark.sql import DataFrame, SparkSession
@@ -8,6 +9,7 @@ from pyspark.sql.types import StringType, StructField, StructType
 
 from electricity_etl.databricks import (
     fetch_sql,
+    merge_parquet_to_uc,
     publish_parquet_to_uc,
     uses_unity_catalog,
 )
@@ -22,10 +24,99 @@ BRONZE_SCHEMA = StructType(
 )
 
 
+_SAFE_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
 def resolve_path(path: str, output_root: str | None) -> str:
     if not output_root:
         return path
     return str(Path(output_root) / path.lstrip("/"))
+
+
+def merge_predicate(keys: list[str], left: str = "t", right: str = "s") -> str:
+    if not keys:
+        raise ValueError("merge_keys are required for a silver merge")
+    parts = []
+    for key in keys:
+        if not _SAFE_IDENT.match(key):
+            raise ValueError(f"Unsafe merge key: {key!r}")
+        parts.append(f"{left}.`{key}` <=> {right}.`{key}`")
+    return " AND ".join(parts)
+
+
+def _spark_table_exists(spark: SparkSession, table: str) -> bool:
+    try:
+        if spark.catalog.tableExists(table):
+            return True
+    except Exception:
+        pass
+    parts = table.split(".")
+    try:
+        if len(parts) == 3 and spark.catalog.tableExists(f"{parts[0]}.{parts[1]}", parts[2]):
+            return True
+    except Exception:
+        pass
+    try:
+        spark.read.table(table).limit(0).collect()
+        return True
+    except Exception:
+        return False
+
+
+def _write_parquet(
+    df: DataFrame,
+    parquet_path: str,
+    partition_by: list[str],
+    merge_keys: list[str] | None,
+) -> None:
+    outgoing = df
+    target = Path(parquet_path)
+    if merge_keys and target.exists():
+        try:
+            existing = df.sparkSession.read.parquet(parquet_path)
+            if existing.take(1):
+                outgoing = existing.join(df, on=list(merge_keys), how="left_anti").unionByName(
+                    df, allowMissingColumns=True
+                )
+        except Exception:
+            outgoing = df
+    writer = outgoing.write.mode("overwrite")
+    if partition_by:
+        writer = writer.partitionBy(*partition_by)
+    writer.parquet(parquet_path)
+    print(f"Wrote parquet {parquet_path}")
+
+
+def _create_or_merge_delta(
+    df: DataFrame,
+    *,
+    table: str,
+    merge_keys: list[str],
+    partition_by: list[str],
+) -> None:
+    spark = df.sparkSession
+    try:
+        spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+    except Exception:
+        pass
+    if not _spark_table_exists(spark, table):
+        writer = df.write.format("delta").mode("overwrite").option("overwriteSchema", "true")
+        if partition_by:
+            writer = writer.partitionBy(*partition_by)
+        writer.saveAsTable(table)
+        print(f"Created delta table {table}")
+        return
+    from delta.tables import DeltaTable
+
+    (
+        DeltaTable.forName(spark, table)
+        .alias("t")
+        .merge(df.alias("s"), merge_predicate(merge_keys))
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute()
+    )
+    print(f"Merged into delta table {table}")
 
 
 def _read_uc_table(spark: SparkSession, fqn: str) -> DataFrame:
@@ -105,6 +196,7 @@ def write_delta_and_parquet(
     output: LayerTableContract,
     output_root: str | None = None,
     write_tables: bool = True,
+    merge_keys: list[str] | None = None,
 ) -> None:
     if output.partition_by is not None:
         partition_by = output.partition_by
@@ -112,23 +204,41 @@ def write_delta_and_parquet(
         partition_by = layer.partition_by or ["year", "month", "day"]
     parquet_path = resolve_path(layer.parquet_path(output.table, output.path), output_root)
     table = layer.qualified_table(output.table)
-
-    parquet_writer = df.write.mode("overwrite")
-    if partition_by:
-        parquet_writer = parquet_writer.partitionBy(*partition_by)
-    parquet_writer.parquet(parquet_path)
-    print(f"Wrote parquet {parquet_path}")
+    keys = merge_keys if merge_keys is not None else output.merge_keys
+    if (layer.write_disposition or "overwrite").lower() != "merge":
+        keys = None
 
     if not write_tables:
-        return
-    if uses_unity_catalog(df.sparkSession):
-        table_writer = df.write.format("delta").mode("overwrite").option("overwriteSchema", "true")
-        if partition_by:
-            table_writer = table_writer.partitionBy(*partition_by)
-        table_writer.saveAsTable(table)
-        print(f"Wrote delta table {table}")
+        _write_parquet(df, parquet_path, partition_by, keys)
         return
 
+    if uses_unity_catalog(df.sparkSession):
+        if keys:
+            _create_or_merge_delta(
+                df, table=table, merge_keys=keys, partition_by=partition_by
+            )
+            _write_parquet(df.sparkSession.table(table), parquet_path, partition_by, None)
+        else:
+            _write_parquet(df, parquet_path, partition_by, None)
+            table_writer = (
+                df.write.format("delta").mode("overwrite").option("overwriteSchema", "true")
+            )
+            if partition_by:
+                table_writer = table_writer.partitionBy(*partition_by)
+            table_writer.saveAsTable(table)
+            print(f"Wrote delta table {table}")
+        return
+
+    _write_parquet(df, parquet_path, partition_by, keys)
+    if keys:
+        merge_parquet_to_uc(
+            Path(parquet_path),
+            volume_path=layer.parquet_path(output.table, output.path),
+            table=table,
+            partition_by=partition_by,
+            merge_keys=keys,
+        )
+        return
     publish_parquet_to_uc(
         Path(parquet_path),
         volume_path=layer.parquet_path(output.table, output.path),

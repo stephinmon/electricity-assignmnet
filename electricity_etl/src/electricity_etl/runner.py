@@ -24,13 +24,26 @@ def _output_key(output) -> str:
     return output.name or output.table
 
 
-def _write_layer_output(frame, *, layer, output, output_root, write_tables) -> None:
+def _merge_keys(layer, output, contract: EtlContract | None = None) -> list[str] | None:
+    if (getattr(layer, "write_disposition", None) or "overwrite").lower() != "merge":
+        return None
+    if output.merge_keys:
+        return list(output.merge_keys)
+    if contract is not None:
+        return list(contract.business_keys)
+    return None
+
+
+def _write_layer_output(
+    frame, *, layer, output, output_root, write_tables, merge_keys=None
+) -> None:
     write_delta_and_parquet(
         frame,
         layer=layer,
         output=output,
         output_root=output_root,
         write_tables=write_tables,
+        merge_keys=merge_keys,
     )
 
 
@@ -60,6 +73,7 @@ def run_silver(
             output=output,
             output_root=output_root,
             write_tables=write_tables,
+            merge_keys=_merge_keys(contract.layers.silver, output, contract),
         )
     return products
 
@@ -87,6 +101,7 @@ def _write_shared_dimensions(contracts, all_products, *, output_root, write_tabl
                 output=output,
                 output_root=output_root,
                 write_tables=write_tables,
+                merge_keys=_merge_keys(contract.layers.silver, output, contract),
             )
             written.add(key)
 
@@ -204,6 +219,7 @@ def run_table(
             output=output,
             output_root=output_root,
             write_tables=write_tables,
+            merge_keys=_merge_keys(layer, output, contract),
         )
         return
 
@@ -224,6 +240,7 @@ def run_table(
             output=output,
             output_root=output_root,
             write_tables=write_tables,
+            merge_keys=_merge_keys(layer, output, contract),
         )
         return
 
@@ -239,6 +256,7 @@ def run_table(
             output=output,
             output_root=output_root,
             write_tables=write_tables,
+            merge_keys=_merge_keys(layer, output, contract),
         )
         return
 
